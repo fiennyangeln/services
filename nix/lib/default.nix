@@ -127,11 +127,12 @@ in rec {
       , command
       , maxRunTime ? 3600
       , features ? { taskclusterProxy = true; }
+      , capabilities ? { privileged = true; }
       , artifacts ? {}
       , env ? {}
       , cache ? {}
       }:
-      { inherit env image features maxRunTime command artifacts cache; };
+      { inherit env image features capabilities maxRunTime command artifacts cache; };
 
     mkTaskclusterTask =
       { extra ? {}
@@ -220,7 +221,7 @@ in rec {
           github:
             env: true
             events:
-              ${if branch == "staging" || branch == "production"
+              ${if branch == "testing" || branch == "staging" || branch == "production"
                 then "- push"
                 else "- pull_request.*\n          - push"}
             branches:
@@ -232,6 +233,8 @@ in rec {
           image: "nixos/nix:1.11"
           features:
             taskclusterProxy: true
+          capabilities:
+            privileged: true
           env:
             APP: "${name'}"
             TASKCLUSTER_SECRETS: "taskcluster/secrets/v1/secret/${secrets}"
@@ -386,6 +389,7 @@ in rec {
     , patchPhase ? ""
     , postInstall ? ""
     , shellHook ? ""
+    , inTesting ? true
     , inStaging ? true
     , inProduction ? false
     }:
@@ -481,6 +485,7 @@ in rec {
         passthru = {
 
           deploy = {
+            testing = self;
             staging = self;
             production = self;
           };
@@ -496,7 +501,8 @@ in rec {
 
           taskclusterGithubTasks =
             map (branch: mkTaskclusterGithubTask { inherit name branch; inherit (self) src_path; })
-                ([ "master" ] ++ optional inStaging "staging"
+                ([ "master" ] ++ optional inTesting "testing"
+                              ++ optional inStaging "staging"
                               ++ optional inProduction "production"
                 );
 
@@ -802,13 +808,15 @@ in rec {
 
           taskclusterGithubTasks =
             map (branch: mkTaskclusterGithubTask { inherit name branch; inherit (self) src_path; })
-                ([ "master" ] ++ optional inStaging "staging"
+                ([ "master" ] ++ optional inTesting "testing"
+                              ++ optional inStaging "staging"
                               ++ optional inProduction "production"
                 );
 
           docker = self_docker;
 
           deploy = {
+            testing = self_docker;
             staging = self_docker;
             production = self_docker;
           };
